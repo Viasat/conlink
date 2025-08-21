@@ -1,0 +1,50 @@
+name: "test12: k3s (kubernetes) and nginx proxy"
+
+env:
+  DC: "${{ process.env.DOCKER_COMPOSE || 'docker compose' }}"
+  MODES_DIR: examples/test12-k3s/modes
+
+tests:
+  test12:
+    name: "deploy and test nginx proxy in k3s (kubernetes)"
+    steps:
+      - exec: :host
+        run: |
+          ./mdc k3s
+          ${DC} down --remove-orphans --volumes -t1
+          ${DC} up -d --force-recreate
+
+      # Wait for conlink and k3s to start up
+      - exec: :host
+        run: |
+          echo "waiting for conlink startup"
+          ${DC} logs network | grep "All links connected"
+        repeat: { retries: 30, interval: '1s' }
+      - exec: k3s-server
+        run: kubectl get nodes 2>/dev/null | grep -c ' Ready ' | grep "^[345]"
+        repeat: { retries: 30, interval: '2s' }
+      - exec: k3s-server
+        run: kubectl get pods -n kube-system 2>/dev/null | grep -c ' Running ' | grep "^[345]"
+        repeat: { retries: 30, interval: '2s' }
+
+      # apply the proxy
+      - exec: k3s-server
+        run: |
+          kubectl apply -f /test/k3s-web-proxy.yaml
+
+      # test two-way traffic through the proxy
+      - id: svc_ip
+        exec: k3s-server
+        run: |
+          kubectl -n nettest get svc/web-proxy -o jsonpath='{.spec.clusterIP}'
+        outputs:
+          SVC_IP: ${{ step.stdout }}
+      - exec: test-client
+        run: |
+          set -o pipefail
+          URL=http://${{ steps['svc_ip'].outputs.SVC_IP }}:80/README.md
+          wget -q -O- ${URL} | head -n10
+        repeat: { retries: 5, interval: '3s' }
+
+      - exec: :host
+        run: ${DC} down --remove-orphans --volumes -t1
