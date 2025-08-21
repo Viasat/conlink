@@ -415,3 +415,56 @@ interfaces to be configured before continuing. Finally the `client`
 service also uses `wait` to probe the `webserver` until it accepts
 TCP connections on port 8080 before, and then it starts its main loop
 that repeatedly requests a templated file from the `webserver`.
+
+## test12: kubernetes (k3s)
+
+This example demonstrates the use of a kubernetes k3s cluster running
+in conlink and communicating with other compose services. It also
+leverage multiple `mdc` modes/modules and the `wait` command.
+
+For convenience, export `MODES_DIR` and create a KUBECTL function that
+will run kubectl in the `k3s-server` container.
+
+```
+export MODES_DIR=./examples/test12-k3s/modes
+KUBECTL() { ./mdc k3s exec k3s-server kubectl "${@}"; }
+```
+
+Start the test12 compose configuration:
+
+```
+./mdc k3s up --build --force-recreate -d
+```
+
+Wait until the nodes are up and the kube-system pods are "Running":
+
+```
+KUBECTL get -w nodes
+KUBECTL get -w pods -A
+```
+
+Deploy an nginx web proxy that will forward web requests to port 8080
+of the top-level `test-server` service (non-kubernetes).
+
+```
+KUBECTL apply -f /test/k3s-web-proxy.yaml
+```
+
+Get the IP of the deployed web-proxy service:
+
+```
+SVC_IP=$(KUBECTL -n nettest get svc/web-proxy -o jsonpath='{.spec.clusterIP}')
+```
+
+From the `test-client` container, do an HTTP GET request to the
+`test-server` container via the k3s deployed nginx proxy:
+
+```
+./mdc k3s exec test-client wget -q -O- http://${SVC_IP}:80/README.md | head -n10
+```
+
+Show the logs of all non-probe web requests to the proxy:
+
+```
+KUBECTL -n nettest logs deploy/web-proxy | grep -v kube-probe
+```

@@ -1,0 +1,70 @@
+x-network:
+  bridges:
+    - { bridge: k0, mode: linux }
+  links:
+    - { service: k3s-server,   bridge: k0, dev: eth1, ip: 10.200.0.1/24 }
+    - { service: k3s-agent-1,  bridge: k0, dev: eth1, ip: 10.200.0.2/24 }
+    - { service: k3s-agent-2,  bridge: k0, dev: eth1, ip: 10.200.0.3/24 }
+    - { service: test-client,  bridge: k0, dev: eth1, ip: 10.200.0.10/24,
+        route: ["10.42.0.0/15 via 10.200.0.2 dev eth1"] }
+    - { service: test-server,  bridge: k0, dev: eth1, ip: 10.200.0.11/24,
+        route: ["10.42.0.0/15 via 10.200.0.2 dev eth1"] }
+
+x-k3s-base: &k3s-base
+    depends_on: {extract-utils: {condition: service_completed_successfully}}
+    image: rancher/k3s:latest
+    privileged: true
+    cgroup: host
+    volumes:
+      - ./utils:/utils:ro
+      - /dev:/dev
+      - ./examples/test12-k3s/:/test:ro
+      # cgroup quirks
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # To write kubeconfig to the host
+      #- ./k3s-output:/output
+    entrypoint: /utils/wait -i eth1 -- /test/k3s-init.sh
+
+services:
+  # Main k3s server
+  k3s-server:
+    <<: *k3s-base
+    # To expose kubernetes control API on the host
+    #ports:
+    #  - "6443:6443" # kubernetes API
+    environment:
+      # To write kubeconfig on host for external kubectl
+      #- K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+      #- K3S_KUBECONFIG_MODE=644
+      # fixed token for adding agents
+      - K3S_TOKEN=changeme-secret-token
+    command: server --disable=traefik --disable=servicelb
+
+  # k3s Agents
+  k3s-agent-1:
+    <<: *k3s-base
+    environment:
+      - K3S_URL=https://k3s-server:6443
+      - K3S_TOKEN=changeme-secret-token
+    command: agent
+
+  k3s-agent-2:
+    <<: *k3s-base
+    environment:
+      - K3S_URL=https://k3s-server:6443
+      - K3S_TOKEN=changeme-secret-token
+    command: agent
+
+  ### For testing two way communication
+  test-client:
+    image: alpine
+    network_mode: none
+    command: sleep infinity
+
+  test-server:
+    image: python
+    network_mode: none
+    volumes:
+      - ./:/top
+    working_dir: /top
+    command: python3 -m http.server 8080
