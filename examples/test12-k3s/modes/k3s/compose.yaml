@@ -29,6 +29,7 @@ services:
   # Main k3s server
   k3s-server:
     <<: *k3s-base
+    hostname: k3s-server
     # To expose kubernetes control API on the host
     #ports:
     #  - "6443:6443" # kubernetes API
@@ -43,6 +44,7 @@ services:
   # k3s Agents
   k3s-agent-1:
     <<: *k3s-base
+    hostname: k3s-agent-1
     environment:
       - K3S_URL=https://k3s-server:6443
       - K3S_TOKEN=changeme-secret-token
@@ -50,6 +52,7 @@ services:
 
   k3s-agent-2:
     <<: *k3s-base
+    hostname: k3s-agent-2
     environment:
       - K3S_URL=https://k3s-server:6443
       - K3S_TOKEN=changeme-secret-token
