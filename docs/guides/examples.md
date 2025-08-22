@@ -286,6 +286,9 @@ sub-interface of the same host (using VLAN ID/tag 5). Static NAT
 address/interface to the internal address/interface (dummy) where the
 web server is running.
 
+NOTE: The conlink container runs in full privileged mode in order to
+be able to create vlans in the root namespace.
+
 Create an environment file with the name of the parent host interface
 and the external IP addresses to assign to each container:
 
@@ -421,6 +424,11 @@ that repeatedly requests a templated file from the `webserver`.
 This example demonstrates the use of a kubernetes k3s cluster running
 in conlink and communicating with other compose services. It also
 leverage multiple `mdc` modes/modules and the `wait` command.
+
+NOTE: The k3s containers run in full privileged mode in order to use
+overlayfs mounts inside the containers. The conlink container must
+also run in privileged mode in order to create veth endpoints in the
+k3s containers.
 
 For convenience, export `MODES_DIR` and create a KUBECTL function that
 will run kubectl in the `k3s-server` container.
