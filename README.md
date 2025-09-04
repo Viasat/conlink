@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/conlink.svg)](https://www.npmjs.com/package/conlink)
 [![docker](https://img.shields.io/docker/v/lonocloud/conlink.svg)](https://hub.docker.com/r/lonocloud/conlink)
+[![Push (compose tests)](https://github.com/Viasat/conlink/actions/workflows/push.yml/badge.svg)](https://github.com/Viasat/conlink/actions/workflows/push.yml)
 
 ## Declarative Low-Level Networking for Containers
 
