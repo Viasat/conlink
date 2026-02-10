@@ -680,6 +680,21 @@ General Options:
         client)
       #(warn "Could not start docker client on '" path "': " %))))
 
+(defn docker-event-stream-handler
+  "Handle docker event stream chunks (newline-delimited JSON)."
+  [event-callback buf-atom chunk]
+  (let [data (str @buf-atom (.toString chunk "utf8"))
+        parts (js->clj (.split data "\n"))
+        tail (last parts)
+        events (butlast parts)]
+    (reset! buf-atom tail)
+    (doseq [line events
+            :when (not (S/blank? line))]
+      (try
+        (event-callback (->clj (js/JSON.parse line)))
+        (catch :default e
+          ((:error @ctx) "Could not parse docker event" line e))))))
+
 (defn docker-listen
   "Listen for docker events from 'client' that match filter 'filters'.
   Calls 'event-callback' function with each decoded event map."
@@ -688,10 +703,14 @@ General Options:
     (P/catch
       (P/let
         [ev-stream ^obj (.getEvents client #js {:filters (json-str filters)})
+         buf (atom "")
          _ ^obj (.on ev-stream "data"
-                     #(event-callback client (->clj (js/JSON.parse %))))]
+                     (partial docker-event-stream-handler
+                              (partial event-callback client)
+                              buf))]
         ev-stream)
       #(error "Could not start docker listener"))))
+
 
 (defn link-repr [{:keys [type dev remote outer-dev bridge ip dev-id]}]
   (str dev-id
@@ -788,19 +807,23 @@ General Options:
   the links for that container and then run any commmands defined for
   the container. Finally call all-connected-check to check and notify
   if all containers/services are connected."
-  [client {:keys [status id]}]
+  [client {:keys [status id] :as evt}]
   (P/let
     [{:keys [log info network-config network-state compose-opts self-pid]} @ctx
-     container-obj (get-container client id)
-     container-data (if (= "die" status)
-                      (P/let [ci (get-in network-state [:containers id])]
-                        (swap! ctx update-in [:network-state :containers]
-                               dissoc id)
-                        ci)
-                      (P/let [ci (query-container-data container-obj)]
-                        (swap! ctx update-in [:network-state :containers]
-                               assoc id ci)
-                        ci))
+     status (or status (:Action evt))
+     id (or id (:ID evt) (get-in evt [:Actor :ID]) (get-in evt [:Actor :id]))
+     container-obj (when (and status id) (get-container client id))
+     container-data (if (or (not status) (not id))
+                      nil
+                      (if (= "die" status)
+                        (P/let [ci (get-in network-state [:containers id])]
+                          (swap! ctx update-in [:network-state :containers]
+                                 dissoc id)
+                          ci)
+                        (P/let [ci (query-container-data container-obj)]
+                          (swap! ctx update-in [:network-state :containers]
+                                 assoc id ci)
+                          ci)))
      {cname :name clabels :labels} container-data
 
      svc-match? (and (let [p (:project compose-opts)]
@@ -812,19 +835,21 @@ General Options:
                 (get-in network-config [:services (:service clabels)]))
      links (concat (:links containers) (:links services))
      commands (concat (:commands containers) (:commands services))]
-    (if (and (not (seq links)) (not (seq commands)))
-      (info (str "Event: no matching config for " cname ", ignoring"))
-      (P/do
-        (info "Event:" status cname id)
-        (P/all (for [link links
-                     :let [link (link-instance-enrich
-                                  link container-data self-pid)]]
-                 (modify-link link status)))
-        (when (= "start" status)
-          (P/all (for [{:keys [command]} commands]
-                   (exec-command cname container-obj command))))
+    (if (or (not status) (not id))
+      nil
+      (if (and (not (seq links)) (not (seq commands)))
+        (info (str "Event: no matching config for " cname ", ignoring"))
+        (P/do
+          (info "Event:" status cname id)
+          (P/all (for [link links
+                       :let [link (link-instance-enrich
+                                    link container-data self-pid)]]
+                   (modify-link link status)))
+          (when (= "start" status)
+            (P/all (for [{:keys [command]} commands]
+                     (exec-command cname container-obj command))))
 
-        (all-connected-check)))))
+          (all-connected-check))))))
 
 (defn exit-handler
   "When the process is exiting, delete all links and bridges that are
