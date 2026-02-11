@@ -62,12 +62,14 @@ jobs:
     needs: [ check-release ]
     name: Release NPM
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with: { submodules: 'recursive', fetch-depth: 0 }
 
-      # Setup .npmrc file to publish to npm
+      # Setup .npmrc file to publish to npm using OIDC
       - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
@@ -75,8 +77,16 @@ jobs:
           scope: ''
 
       - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Print npm debug log if present
+        if: failure()
+        run: |
+          if ls /home/runner/.npm/_logs/*debug*; then
+            cat /home/runner/.npm/_logs/*debug*
+          else
+            echo "No debug log present"
+          fi
+
 
   release-docker-hub:
     needs: [ check-release ]
