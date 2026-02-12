@@ -70,21 +70,21 @@ jobs:
         with: { submodules: 'recursive', fetch-depth: 0 }
 
       # Setup .npmrc file to publish to npm using OIDC
-       - uses: actions/setup-node@v4
-         with:
-           node-version: '20.x'
-           registry-url: 'https://registry.npmjs.org'
-           scope: ''
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+          scope: ''
 
-       - name: Print environment variables
-         run: env
+      - name: Print environment variables
+        run: env
 
-       - name: Print .npmrc after setup-node
-         run: cat ~/.npmrc
+      - name: Print .npmrc after setup-node
+        run: cat ~/.npmrc
 
-       - run: npm publish
+      - run: npm publish
 
-       - name: Print npm debug log if present
+      - name: Print npm debug log if present
         if: failure()
         run: |
           if ls /home/runner/.npm/_logs/*debug*; then
@@ -92,6 +92,7 @@ jobs:
           else
             echo "No debug log present"
           fi
+
 
 
   release-docker-hub:
