@@ -79,8 +79,16 @@ jobs:
       - name: Print environment variables
         run: env
 
-      - name: Print .npmrc after setup-node
-        run: cat ~/.npmrc
+      - name: Print actual npmrc config for OIDC
+        run: |
+          echo "NPM_CONFIG_USERCONFIG points to $NPM_CONFIG_USERCONFIG"
+          if [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+            echo "---- .npmrc content ----"
+            cat "$NPM_CONFIG_USERCONFIG"
+            echo "-----------------------"
+          else
+            echo "No .npmrc found at $NPM_CONFIG_USERCONFIG"
+          fi
 
       - run: npm publish
 
