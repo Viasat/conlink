@@ -90,6 +90,12 @@ jobs:
             echo "No .npmrc found at $NPM_CONFIG_USERCONFIG"
           fi
 
+      - name: Debug npm identity
+        run: |
+          echo "NODE_AUTH_TOKEN present: ${NODE_AUTH_TOKEN:+yes}"
+          echo "Running npm whoami (may fail if not authenticated)"
+          npm whoami || echo "npm whoami failed or not authenticated"
+
       - run: npm publish
 
       - name: Print npm debug log if present
