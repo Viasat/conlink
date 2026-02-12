@@ -62,21 +62,93 @@ jobs:
     needs: [ check-release ]
     name: Release NPM
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with: { submodules: 'recursive', fetch-depth: 0 }
 
-      # Setup .npmrc file to publish to npm
-      - uses: actions/setup-node@v4
+      # Ensure any overriding tokens are removed so setup-node can perform OIDC exchange
+      - name: Unset any overriding npm tokens
+        run: |
+          unset NODE_AUTH_TOKEN || true
+          unset NPM_TOKEN || true
+
+      # Setup .npmrc file to publish to npm using OIDC
+      - name: Setup Node (force OIDC)
+        uses: actions/setup-node@v4
+        env:
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
           scope: ''
 
+      - name: Print environment variables
+        run: env
+
+      - name: Show GITHUB_ENV fragments (check if setup-node wrote NODE_AUTH_TOKEN)
+        run: |
+          echo "GITHUB_ENV contents (last 200 lines)"
+          if [ -f "$GITHUB_ENV" ]; then
+            tail -n 200 "$GITHUB_ENV" || true
+          else
+            echo "No GITHUB_ENV file present"
+          fi
+
+      - name: Print actual npmrc config for OIDC
+        run: |
+          echo "NPM_CONFIG_USERCONFIG points to $NPM_CONFIG_USERCONFIG"
+          if [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+            echo "---- .npmrc content ----"
+            cat "$NPM_CONFIG_USERCONFIG"
+            echo "-----------------------"
+          else
+            echo "No .npmrc found at $NPM_CONFIG_USERCONFIG"
+          fi
+
+      - name: Inspect OIDC request env
+        run: |
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN present: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL present: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
+
+      - name: Print OIDC JWT header (safe)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              // github.getOIDCToken may throw if OIDC not available
+              const token = await github.getOIDCToken();
+              if (!token) { console.log('No OIDC token returned'); return }
+              const headerB64 = token.split('.')[0];
+              // base64url -> base64
+              const padded = headerB64.replace(/-/g, '+').replace(/_/g, '/');
+              const buf = Buffer.from(padded, 'base64');
+              console.log('OIDC JWT header:', buf.toString('utf8'));
+            } catch (e) {
+              console.log('Failed to get/inspect OIDC token:', e && e.message ? e.message : e)
+            }
+
+      - name: Debug npm identity
+        run: |
+          echo "NODE_AUTH_TOKEN present: ${NODE_AUTH_TOKEN:+yes}"
+          echo "Running npm whoami (may fail if not authenticated)"
+          npm whoami || echo "npm whoami failed or not authenticated"
+
       - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Print npm debug log if present
+        if: failure()
+        run: |
+          if ls /home/runner/.npm/_logs/*debug*; then
+            cat /home/runner/.npm/_logs/*debug*
+          else
+            echo "No debug log present"
+          fi
+
+
 
   release-docker-hub:
     needs: [ check-release ]
