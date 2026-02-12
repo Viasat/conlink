@@ -76,7 +76,11 @@ jobs:
           unset NPM_TOKEN || true
 
       # Setup .npmrc file to publish to npm using OIDC
-      - uses: actions/setup-node@v4
+      - name: Setup Node (force OIDC)
+        uses: actions/setup-node@v4
+        env:
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
