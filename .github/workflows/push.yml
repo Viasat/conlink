@@ -85,6 +85,15 @@ jobs:
       - name: Print environment variables
         run: env
 
+      - name: Show GITHUB_ENV fragments (check if setup-node wrote NODE_AUTH_TOKEN)
+        run: |
+          echo "GITHUB_ENV contents (last 200 lines)"
+          if [ -f "$GITHUB_ENV" ]; then
+            tail -n 200 "$GITHUB_ENV" || true
+          else
+            echo "No GITHUB_ENV file present"
+          fi
+
       - name: Print actual npmrc config for OIDC
         run: |
           echo "NPM_CONFIG_USERCONFIG points to $NPM_CONFIG_USERCONFIG"
