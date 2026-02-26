@@ -10,10 +10,10 @@ ln -sfn /var/lib/rancher/k3s/agent/etc/cni/net.d      /etc/cni/net.d
 
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd/
 cat > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl <<EOF
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]
   SystemdCgroup = false
 
-[plugins."io.containerd.grpc.v1.cri".cni]
+[plugins."io.containerd.cri.v1.runtime".cni]
   bin_dir  = "/var/lib/rancher/k3s/data/cni"
   conf_dir = "/var/lib/rancher/k3s/agent/etc/cni/net.d"
 EOF
