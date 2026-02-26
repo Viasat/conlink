@@ -28,6 +28,12 @@ K3S_ARGS="${K3S_ARGS} --kubelet-arg=cgroup-root=/"
 K3S_ARGS="${K3S_ARGS} --kubelet-arg=runtime-cgroups=/systemd/system.slice"
 K3S_ARGS="${K3S_ARGS} --kubelet-arg=kubelet-cgroups=/systemd/system.slice"
 
+if [ "${ROLE}" = "server" ]; then
+  # Use non-default k8s range in case our host is a k8s pod itself
+  # TODO: dynamically check and host ranges
+  K3S_ARGS="${K3S_ARGS} --cluster-cidr=10.128.0.0/16 --service-cidr=10.129.0.0/16"
+fi
+
 echo exec k3s "${ROLE}" ${K3S_ARGS} "$@"
 exec k3s "${ROLE}" ${K3S_ARGS} "$@"
 
