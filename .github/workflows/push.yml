@@ -80,18 +80,24 @@ jobs:
 
   release-docker-hub:
     needs: [ check-release ]
-    name: Release Docker Hub
-    runs-on: ubuntu-latest
+    name: Release Docker Hub (native multi-arch)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+    runs-on: ${{ matrix.runner }}
     env:
       RELEASE_VERSION: ${{ needs.check-release.outputs.RELEASE_VERSION }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with: { submodules: 'recursive', fetch-depth: 0 }
-
-      # For multi-platform build
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -102,12 +108,40 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push (multi-arch)
+      - name: Build and push (native ${{ matrix.suffix }})
         uses: docker/build-push-action@v6
         with:
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           tags: |
-            lonocloud/conlink:${{ env.RELEASE_VERSION }}
-            lonocloud/conlink:latest
+            lonocloud/conlink:${{ env.RELEASE_VERSION }}-${{ matrix.suffix }}
+            lonocloud/conlink:latest-${{ matrix.suffix }}
+
+  release-docker-hub-manifest:
+    needs: [ check-release, release-docker-hub ]
+    name: Release Docker Hub (publish multi-arch tags)
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ needs.check-release.outputs.RELEASE_VERSION }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifests
+        run: |
+          docker buildx imagetools create \
+            -t lonocloud/conlink:${RELEASE_VERSION}-test \
+            lonocloud/conlink:${RELEASE_VERSION}-amd64 \
+            lonocloud/conlink:${RELEASE_VERSION}-arm64
+
+          docker buildx imagetools create \
+            -t lonocloud/conlink:latest \
+            lonocloud/conlink:latest-amd64 \
+            lonocloud/conlink:latest-arm64
 
