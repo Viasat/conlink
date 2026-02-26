@@ -27,26 +27,36 @@ RUN cd /app && \
 ###
 FROM rust:latest AS rust-build
 
-RUN rustup target add x86_64-unknown-linux-musl
+# Buildx sets this automatically
+ARG TARGETARCH
 
 # musl-tools for static linking
 RUN apt-get update && apt-get install -y musl-tools
+
+# Pick the musl target based on the target arch
+# amd64 -> x86_64-unknown-linux-musl
+# arm64 -> aarch64-unknown-linux-musl
+RUN case "${TARGETARCH}" in \
+      amd64) echo x86_64-unknown-linux-musl ;; \
+      arm64) echo aarch64-unknown-linux-musl ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac > /tmp/target_triple
+
+RUN rustup target add "$(cat /tmp/target_triple)"
 
 WORKDIR /app/
 RUN mkdir -p src
 
 # Download and compile deps for rebuild efficiency
-#COPY Cargo.toml Cargo.lock ./
 COPY rust/Cargo.toml ./
 RUN echo "fn main() {}" > src/echo.rs
-RUN cargo build --release --target x86_64-unknown-linux-musl --bin echo
-RUN rm src/echo.rs # 1
+RUN cargo build --release --target "$(cat /tmp/target_triple)" --bin echo
+RUN rm src/echo.rs
 
 # Build the main program
 COPY rust/src/* src/
-RUN cargo build --release --target x86_64-unknown-linux-musl
-RUN cd /app/target/x86_64-unknown-linux-musl/release/ && cp -v wait copy echo /app/
-# Located at: ./target/x86_64-unknown-linux-musl/release/
+RUN cargo build --release --target "$(cat /tmp/target_triple)"
+RUN cd "/app/target/$(cat /tmp/target_triple)/release/" && cp -v wait copy echo /app/
 
 ###
 ### conlink runtime stage
