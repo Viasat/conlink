@@ -136,7 +136,7 @@ jobs:
       - name: Create and push multi-arch manifests
         run: |
           docker buildx imagetools create \
-            -t lonocloud/conlink:${RELEASE_VERSION}-test \
+            -t lonocloud/conlink:${RELEASE_VERSION} \
             lonocloud/conlink:${RELEASE_VERSION}-amd64 \
             lonocloud/conlink:${RELEASE_VERSION}-arm64
 
