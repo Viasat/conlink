@@ -62,21 +62,27 @@ jobs:
     needs: [ check-release ]
     name: Release NPM
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with: { submodules: 'recursive', fetch-depth: 0 }
 
-      # Setup .npmrc file to publish to npm
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
-          scope: ''
+
+      - name: Upgrade npm to support OIDC
+        run: |
+          npm install -g npm@11.12.0
+          node --version
+          npm --version
 
       - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   release-docker-hub:
     needs: [ check-release ]
